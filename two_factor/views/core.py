@@ -547,6 +547,9 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         # PhoneNumberForm / YubiKeyDeviceForm / EmailForm / WebauthnDeviceValidationForm
         elif method.code in ('call', 'sms', 'yubikey', 'email', 'webauthn'):
             device = self.get_device()
+            if method.code == 'email':
+                device.confirmed = True
+
             device.save()
 
         else:
