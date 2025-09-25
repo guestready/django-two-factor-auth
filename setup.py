@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='django-two-factor-auth',
-    version='1.16.0',
+    version='1.16.1',
     description='Complete Two-Factor Authentication for Django',
     long_description=open('README.rst', encoding='utf-8').read(),
     author='Bouke Haarsma',
@@ -15,7 +15,7 @@ setup(
         'Django>=3.2',
         'django_otp>=0.8.0',
         'qrcode>=4.0.0,<7.99',
-        'django-phonenumber-field<8',
+        'django-phonenumber-field<9',
         'django-formtools',
     ],
     extras_require={
