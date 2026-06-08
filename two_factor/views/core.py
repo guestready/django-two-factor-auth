@@ -550,7 +550,8 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             if method.code == 'email':
                 device.confirmed = True
 
-            device.name = name
+            if device.pk is None:
+                device.name = name
             device.save()
 
         else:
