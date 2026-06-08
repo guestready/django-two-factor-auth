@@ -513,12 +513,16 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
     def get_available_methods(self):
         return registry.get_methods()
 
-    def get_new_device_name(self, method):
-        """Name for the device: 'default' for the first, else the method code."""
-        has_default = any(
-            device.name == 'default' for device in devices_for_user(self.request.user)
+    def get_new_device_name(self, method, current_device=None):
+        """
+        Name for the device being enrolled: 'default' for the account's first
+        device, otherwise the method code.
+        """
+        has_other_default = any(
+            device.name == 'default' and (current_device is None or device.persistent_id != current_device.persistent_id)
+            for device in devices_for_user(self.request.user)
         )
-        return method.code if has_default else 'default'
+        return method.code if has_other_default else 'default'
 
     def render_next_step(self, form, **kwargs):
         """
@@ -545,17 +549,15 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             pass
 
         method = self.get_method()
-        name = self.get_new_device_name(method)
         # TOTPDeviceForm
         if method.code == 'generator':
             form = [form for form in form_list if isinstance(form, TOTPDeviceForm)][0]
-            device = form.save(name=name)
+            device = form.save(name=self.get_new_device_name(method))
 
         # PhoneNumberForm / YubiKeyDeviceForm / EmailForm / WebauthnDeviceValidationForm
         elif method.code in ('call', 'sms', 'yubikey', 'email', 'webauthn'):
             device = self.get_device()
-            if device.pk is None:
-                device.name = name
+            device.name = self.get_new_device_name(method, device)
             device.save()
 
         else:
