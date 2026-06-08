@@ -12,14 +12,14 @@
         <li>
           {{ device|as_method_name }}
           {% if device.name == 'default' %}
-            <span class="badge badge-primary">{% trans "Primary" %}</span>
+            <span class="badge badge-primary">{% trans "Default" %}</span>
           {% else %}
             <form method="post" action="{% url 'two_factor:device_set_default' %}"
                 style="display:inline">
               {% csrf_token %}
               <input type="hidden" name="device" value="{{ device.persistent_id }}">
               <button class="btn btn-sm btn-secondary"
-                    type="submit">{% trans "Make Primary" %}</button>
+                    type="submit">{% trans "Set as default" %}</button>
             </form>
           {% endif %}
           <form method="post" action="{% url 'two_factor:device_delete' %}"
