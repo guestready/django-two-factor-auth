@@ -33,7 +33,6 @@ class WebauthnNicknameForm(forms.Form):
     nickname = forms.CharField(
         label=_("Passkey nickname"),
         max_length=64,
-        required=False,
         help_text=_(
             "This passkey can work across multiple devices — pick a nickname "
             "that will help you identify it later. For example, the name of "

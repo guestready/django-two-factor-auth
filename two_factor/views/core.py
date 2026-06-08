@@ -643,6 +643,9 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         elif self.steps.current == 'validation':
             context['device'] = self.get_device()
         context['cancel_url'] = resolve_url(settings.LOGIN_REDIRECT_URL)
+        # True when the user is adding a method to an account that already has
+        # 2FA, so templates can show "add a method" instead of "enable 2FA".
+        context['already_enabled'] = bool(default_device(self.request.user))
         return context
 
     def process_step(self, form):

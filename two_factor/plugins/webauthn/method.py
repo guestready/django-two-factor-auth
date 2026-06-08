@@ -35,8 +35,8 @@ class WebAuthnMethod(MethodBase):
 
     def get_setup_forms(self, *args):
         return {
-            'webauthn_nickname': WebauthnNicknameForm,
             self.code: WebauthnDeviceValidationForm,
+            'webauthn_nickname': WebauthnNicknameForm,
         }
 
     def get_device_from_setup_data(self, request, setup_data, **kwargs):
