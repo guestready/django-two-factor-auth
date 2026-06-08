@@ -2,8 +2,8 @@ from django.apps.registry import apps
 from django.urls import include, path
 
 from two_factor.views import (
-    BackupTokensView, DisableView, LoginView, ProfileView, QRGeneratorView,
-    SetupCompleteView, SetupView,
+    BackupTokensView, DeviceDeleteView, DeviceSetDefaultView, DisableView,
+    LoginView, ProfileView, QRGeneratorView, SetupCompleteView, SetupView,
 )
 
 core = [
@@ -44,6 +44,16 @@ profile = [
         'account/two_factor/disable/',
         DisableView.as_view(),
         name='disable',
+    ),
+    path(
+        'account/two_factor/device/delete/',
+        DeviceDeleteView.as_view(),
+        name='device_delete',
+    ),
+    path(
+        'account/two_factor/device/set_default/',
+        DeviceSetDefaultView.as_view(),
+        name='device_set_default',
     ),
 ]
 

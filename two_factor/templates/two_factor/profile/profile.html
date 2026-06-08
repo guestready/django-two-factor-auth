@@ -6,7 +6,35 @@
   <h1>{% block title %}{% trans "Account Security" %}{% endblock %}</h1>
 
   {% if default_device %}
-    <p>{% blocktrans with primary=default_device|as_action %}Primary method: {{ primary }}{% endblocktrans %}</p>
+    <h2>{% trans "Authentication Methods" %}</h2>
+    <ul>
+      {% for device in method_devices %}
+        <li>
+          {{ device|as_method_name }}
+          {% if device.name == 'default' %}
+            <span class="badge badge-primary">{% trans "Primary" %}</span>
+          {% else %}
+            <form method="post" action="{% url 'two_factor:device_set_default' %}"
+                style="display:inline">
+              {% csrf_token %}
+              <input type="hidden" name="device" value="{{ device.persistent_id }}">
+              <button class="btn btn-sm btn-secondary"
+                    type="submit">{% trans "Make Primary" %}</button>
+            </form>
+          {% endif %}
+          <form method="post" action="{% url 'two_factor:device_delete' %}"
+              style="display:inline"
+              onsubmit="return confirm({% trans 'Are you sure?' %})">
+            {% csrf_token %}
+            <input type="hidden" name="device" value="{{ device.persistent_id }}">
+            <button class="btn btn-sm btn-warning"
+                  type="submit">{% trans "Unregister" %}</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+    <p><a href="{% url 'two_factor:setup' %}"
+      class="btn btn-info">{% trans "Add Another Method" %}</a></p>
 
     {% if available_phone_methods %}
       <h2>{% trans "Backup Phone Numbers" %}</h2>

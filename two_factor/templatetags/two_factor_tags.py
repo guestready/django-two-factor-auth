@@ -15,3 +15,8 @@ def as_action(device):
 def as_verbose_action(device):
     method = registry.method_from_device(device)
     return method.get_verbose_action(device)
+
+
+@register.filter
+def as_method_name(device):
+    return registry.method_from_device(device).verbose_name
