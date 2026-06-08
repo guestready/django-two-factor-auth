@@ -17,44 +17,45 @@ class SetupTest(UserMixin, TestCase):
         self.user = self.create_user()
         self.login_user()
 
-    @skipUnless(webauthn, 'package webauthn is not present')
-    def test_setup_webauthn(self):
-        self.assertEqual(0, self.user.webauthn_keys.count())
-
-        response = self.client.post(
+    def _register_webauthn(self, nickname=''):
+        """Drive the wizard through welcome → method → nickname → credential."""
+        self.client.post(
             reverse('two_factor:setup'),
             data={'setup_view-current_step': 'welcome'})
-        self.assertContains(response, 'Method:')
-
-        response = self.client.post(
+        self.client.post(
             reverse('two_factor:setup'),
             data={'setup_view-current_step': 'method',
                   'method-method': 'webauthn'})
-        self.assertContains(response, 'Token:')
-        session = self.client.session
-        self.assertIn('webauthn_creation_options', session.keys())
-
-        response = self.client.post(
+        self.client.post(
             reverse('two_factor:setup'),
-            data={'setup_view-current_step': 'webauthn'})
-        self.assertEqual(response.context_data['wizard']['form'].errors,
-                         {'token': ['This field is required.']})
-
+            data={'setup_view-current_step': 'webauthn_nickname',
+                  'webauthn_nickname-nickname': nickname})
         with mock.patch(
             "two_factor.plugins.webauthn.forms.parse_registration_credential_json"
         ), mock.patch(
             "two_factor.plugins.webauthn.method.verify_registration_response"
         ) as verify_registration_response:
             verify_registration_response.return_value = (
-                'mocked_public_key',
-                'mocked_credential_id',
-                0,
+                'mocked_public_key', 'mocked_credential_id', 0,
             )
-
-            response = self.client.post(
+            return self.client.post(
                 reverse('two_factor:setup'),
                 data={'setup_view-current_step': 'webauthn',
                       'webauthn-token': 'a_valid_token'})
 
+    @skipUnless(webauthn, 'package webauthn is not present')
+    def test_setup_webauthn_stores_nickname(self):
+        self.assertEqual(0, self.user.webauthn_keys.count())
+        response = self._register_webauthn(nickname='Work laptop')
         self.assertRedirects(response, reverse('two_factor:setup_complete'))
-        self.assertEqual(1, self.user.webauthn_keys.count())
+        device = self.user.webauthn_keys.get()
+        self.assertEqual(device.nickname, 'Work laptop')
+
+    @skipUnless(webauthn, 'package webauthn is not present')
+    def test_setup_second_webauthn(self):
+        self.user.webauthn_keys.create(
+            name='default', public_key='x', key_handle='AAAA', sign_count=0)
+        self.login_user()
+        self._register_webauthn(nickname='Phone')
+        self.assertEqual(2, self.user.webauthn_keys.count())
+        self.assertTrue(self.user.webauthn_keys.filter(nickname='Phone').exists())

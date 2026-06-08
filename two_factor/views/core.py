@@ -511,7 +511,11 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         return form_list
 
     def get_available_methods(self):
-        return registry.get_methods()
+        user = self.request.user
+        return [
+            method for method in registry.get_methods()
+            if method.allow_multiple or not list(method.get_devices(user))
+        ]
 
     def get_new_device_name(self, method, current_device=None):
         """
@@ -586,6 +590,8 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             kwargs['device'] = self.get_device()
         if 'request' in form_params:
             kwargs['request'] = self.request
+        if 'methods' in form_params:
+            kwargs['methods'] = self.get_available_methods()
 
         metadata = self.get_form_metadata(step)
         if metadata:

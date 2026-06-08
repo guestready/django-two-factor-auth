@@ -294,3 +294,30 @@ class SetupViewDeviceNameTest(UserMixin, TestCase):
         device = self.user.totpdevice_set.create(name='default')
         method = registry.get_method('generator')
         self.assertEqual(self.view.get_new_device_name(method, device), 'default')
+
+
+class SetupViewAvailableMethodsTest(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.view = SetupView()
+        self.view.request = RequestFactory().get('/')
+        self.view.request.user = self.user
+
+    def codes(self):
+        return [method.code for method in self.view.get_available_methods()]
+
+    @method_registry(['generator', 'webauthn'])
+    def test_lists_all_when_none_configured(self):
+        self.assertEqual(set(self.codes()), {'generator', 'webauthn'})
+
+    @method_registry(['generator', 'webauthn'])
+    def test_excludes_configured_single_method(self):
+        self.user.totpdevice_set.create(name='default')
+        self.assertEqual(self.codes(), ['webauthn'])
+
+    @method_registry(['generator', 'webauthn'])
+    def test_keeps_webauthn_when_already_configured(self):
+        self.user.webauthn_keys.create(
+            name='default', public_key='x', key_handle='y', sign_count=0)
+        self.assertIn('webauthn', self.codes())

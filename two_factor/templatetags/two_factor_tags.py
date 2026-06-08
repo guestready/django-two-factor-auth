@@ -19,4 +19,4 @@ def as_verbose_action(device):
 
 @register.filter
 def as_method_name(device):
-    return registry.method_from_device(device).verbose_name
+    return registry.method_from_device(device).get_device_label(device)
