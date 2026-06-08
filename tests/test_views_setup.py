@@ -226,6 +226,12 @@ class SetupTest(UserMixin, TestCase):
         response = self.client.get(reverse('two_factor:setup'))
         self.assertEqual(response.status_code, 200)
 
+    def test_reentry_blocked_when_configured_but_unverified(self):
+        self.enable_otp()
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(self.login_url, response.url)
+
     def test_no_double_login(self):
         """
         Activating two-factor authentication for ones account, should

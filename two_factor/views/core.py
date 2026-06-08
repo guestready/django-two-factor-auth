@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.signing import BadSignature
 from django.forms import Form, ValidationError
@@ -475,6 +476,12 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         method_data = self.storage.validated_step_data.get('method', {})
         method_key = method_data.get('method', None)
         return registry.get_method(method_key)
+
+    def get(self, request, *args, **kwargs):
+        # Enrolled but unverified can't re-enter: done() would verify them.
+        if default_device(request.user) and not request.user.is_verified():
+            return redirect_to_login(request.get_full_path())
+        return super().get(request, *args, **kwargs)
 
     def get_form(self, step=None, **kwargs):
         # Until https://github.com/jazzband/django-formtools/pull/62 is merged
