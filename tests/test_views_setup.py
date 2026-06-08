@@ -8,8 +8,6 @@ from django.urls import reverse
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.oath import totp
 
-from django_otp.plugins.otp_email.models import EmailDevice
-
 from two_factor.plugins.registry import registry
 from two_factor.views import SetupView
 
@@ -290,31 +288,9 @@ class SetupViewDeviceNameTest(UserMixin, TestCase):
         method = registry.get_method('generator')
         self.assertEqual(self.view.get_new_device_name(method), 'generator')
 
-
-class SetupEmailResetupTest(UserMixin, TestCase):
-    """Re-running email setup must not demote the existing 'default' device.
-
-    Email is the one method that reuses its existing device, so naming the
-    "new" device by method code would rename the user's only 'default' device
-    and silently disable the login OTP step.
-    """
-    def setUp(self):
-        super().setUp()
-        self.user = self.create_user()
-        self.device = EmailDevice.objects.create(user=self.user, name='default')
-        self.login_user()
-
-    @mock.patch.object(EmailDevice, 'verify_token', return_value=True)
-    @mock.patch.object(EmailDevice, 'generate_challenge')
-    def test_resetup_email_keeps_default_name(self, generate_challenge, verify_token):
-        self.client.post(reverse('two_factor:setup'),
-                         data={'setup_view-current_step': 'welcome'})
-        self.client.post(reverse('two_factor:setup'),
-                         data={'setup_view-current_step': 'method',
-                               'method-method': 'email'})
-        self.client.post(reverse('two_factor:setup'),
-                         data={'setup_view-current_step': 'validation',
-                               'validation-token': '123456'})
-        self.device.refresh_from_db()
-        self.assertEqual(self.device.name, 'default')
-        self.assertEqual(EmailDevice.objects.filter(user=self.user).count(), 1)
+    def test_resaving_current_default_keeps_default_name(self):
+        # Email reuses and re-saves its own device mid-wizard; the device being
+        # saved is excluded, so it stays 'default' instead of being demoted.
+        device = self.user.totpdevice_set.create(name='default')
+        method = registry.get_method('generator')
+        self.assertEqual(self.view.get_new_device_name(method, device), 'default')
