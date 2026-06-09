@@ -481,6 +481,8 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         # Enrolled but unverified can't re-enter: done() would verify them.
         if default_device(request.user) and not request.user.is_verified():
             return redirect_to_login(request.get_full_path())
+        if not self.get_available_methods():
+            return redirect('two_factor:profile')
         return super().get(request, *args, **kwargs)
 
     def get_form(self, step=None, **kwargs):

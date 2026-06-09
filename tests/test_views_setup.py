@@ -32,6 +32,13 @@ class SetupTest(UserMixin, TestCase):
         self.assertContains(response, 'Add an authentication method')
 
     @method_registry(['generator'])
+    def test_redirects_to_profile_when_no_methods_available(self):
+        self.enable_otp()
+        self.login_user()
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertRedirects(response, reverse('two_factor:profile'))
+
+    @method_registry(['generator'])
     def test_setup_only_generator_available(self):
         response = self.client.post(
             reverse('two_factor:setup'),

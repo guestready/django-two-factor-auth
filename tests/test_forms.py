@@ -37,3 +37,7 @@ class MethodFormTests(TestCase):
         form = MethodForm(methods=[GeneratorMethod()])
         self.assertEqual(
             [code for code, _ in form.fields['method'].choices], ['generator'])
+
+    def test_no_methods_does_not_crash(self):
+        form = MethodForm(methods=[])
+        self.assertEqual(form.fields['method'].choices, [])
