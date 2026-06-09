@@ -303,6 +303,7 @@ class SetupViewAvailableMethodsTest(UserMixin, TestCase):
         self.view = SetupView()
         self.view.request = RequestFactory().get('/')
         self.view.request.user = self.user
+        self.view.storage = mock.Mock(validated_step_data={})
 
     def codes(self):
         return [method.code for method in self.view.get_available_methods()]
@@ -321,3 +322,11 @@ class SetupViewAvailableMethodsTest(UserMixin, TestCase):
         self.user.webauthn_keys.create(
             name='default', public_key='x', key_handle='y', sign_count=0)
         self.assertIn('webauthn', self.codes())
+
+    @method_registry(['generator', 'webauthn'])
+    def test_keeps_current_method_being_set_up(self):
+        # A single method stays available while it is the one being set up, even
+        # though its device may have been saved mid-wizard (e.g. email).
+        self.user.totpdevice_set.create(name='default')
+        self.view.get_method = lambda: registry.get_method('generator')
+        self.assertIn('generator', self.codes())

@@ -512,9 +512,12 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
 
     def get_available_methods(self):
         user = self.request.user
+        current = self.get_method()
         return [
             method for method in registry.get_methods()
-            if method.allow_multiple or not list(method.get_devices(user))
+            if method.allow_multiple
+            or (current and method.code == current.code)
+            or not list(method.get_devices(user))
         ]
 
     def get_new_device_name(self, method, current_device=None):
