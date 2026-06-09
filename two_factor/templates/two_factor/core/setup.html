@@ -6,11 +6,17 @@
 {% endblock %}
 
 {% block content %}
-  <h1>{% block title %}{% trans "Enable Two-Factor Authentication" %}{% endblock %}</h1>
+  <h1>{% block title %}{% if already_enabled %}{% trans "Add an authentication method" %}{% else %}{% trans "Enable Two-Factor Authentication" %}{% endif %}{% endblock %}</h1>
   {% if wizard.steps.current == 'welcome' %}
-    <p>{% blocktrans trimmed %}You are about to take your account security to the
-        next level. Follow the steps in this wizard to enable two-factor
-        authentication.{% endblocktrans %}</p>
+    {% if already_enabled %}
+      <p>{% blocktrans trimmed %}Two-factor authentication is already enabled for
+          your account. Follow the steps in this wizard to add another
+          authentication method.{% endblocktrans %}</p>
+    {% else %}
+      <p>{% blocktrans trimmed %}You are about to take your account security to the
+          next level. Follow the steps in this wizard to enable two-factor
+          authentication.{% endblocktrans %}</p>
+    {% endif %}
   {% elif wizard.steps.current == 'method' %}
     <p>{% blocktrans trimmed %}Please select which authentication method you would
         like to use.{% endblocktrans %}</p>

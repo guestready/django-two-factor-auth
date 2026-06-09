@@ -25,6 +25,12 @@ class SetupTest(UserMixin, TestCase):
         self.assertContains(response, 'Follow the steps in this wizard to '
                                       'enable two-factor')
 
+    def test_reentry_shows_add_method_messaging(self):
+        self.enable_otp()
+        self.login_user()  # re-login so the session device marks us verified
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertContains(response, 'Add an authentication method')
+
     @method_registry(['generator'])
     def test_setup_only_generator_available(self):
         response = self.client.post(
