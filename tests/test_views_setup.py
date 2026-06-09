@@ -7,6 +7,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.oath import totp
+from django_otp.plugins.otp_email.models import EmailDevice
 
 from two_factor.plugins.registry import registry
 from two_factor.views import SetupView
@@ -343,3 +344,20 @@ class SetupViewAvailableMethodsTest(UserMixin, TestCase):
         self.user.totpdevice_set.create(name='default')
         self.view.get_method = lambda: registry.get_method('generator')
         self.assertIn('generator', self.codes())
+
+
+class SetupCompleteViewTest(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.enable_otp()
+        self.login_user()  # session device marks us verified for otp_required
+
+    def test_first_setup_shows_enabled_message(self):
+        response = self.client.get(reverse('two_factor:setup_complete'))
+        self.assertContains(response, 'successfully enabled two-factor')
+
+    def test_added_method_shows_added_message(self):
+        EmailDevice.objects.create(user=self.user, name='email')
+        response = self.client.get(reverse('two_factor:setup_complete'))
+        self.assertContains(response, 'added another')

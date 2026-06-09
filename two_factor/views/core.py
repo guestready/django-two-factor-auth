@@ -45,7 +45,7 @@ from ..forms import (
     AuthenticationTokenForm, BackupTokenForm, DeviceValidationForm, MethodForm,
     TOTPDeviceForm,
 )
-from ..utils import default_device, get_otpauth_url
+from ..utils import default_device, get_method_devices, get_otpauth_url
 from .utils import (
     IdempotentSessionWizardView, class_view_decorator,
     get_remember_device_cookie, validate_remember_device_cookie,
@@ -716,6 +716,7 @@ class SetupCompleteView(TemplateView):
     def get_context_data(self):
         return {
             'phone_methods': get_available_phone_methods(),
+            'is_method_added': len(get_method_devices(self.request.user)) > 1,
         }
 
 

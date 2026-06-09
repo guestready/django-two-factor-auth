@@ -2,10 +2,15 @@
 {% load i18n %}
 
 {% block content %}
-  <h1>{% block title %}{% trans "Enable Two-Factor Authentication" %}{% endblock %}</h1>
+  <h1>{% block title %}{% if is_method_added %}{% trans "Authentication method added" %}{% else %}{% trans "Enable Two-Factor Authentication" %}{% endif %}{% endblock %}</h1>
 
-  <p>{% blocktrans trimmed %}Congratulations, you've successfully enabled two-factor
-      authentication.{% endblocktrans %}</p>
+  {% if is_method_added %}
+    <p>{% blocktrans trimmed %}You've successfully added another authentication
+        method to your account.{% endblocktrans %}</p>
+  {% else %}
+    <p>{% blocktrans trimmed %}Congratulations, you've successfully enabled two-factor
+        authentication.{% endblocktrans %}</p>
+  {% endif %}
 
   {% if not phone_methods %}
     <p><a href="{% url 'two_factor:profile' %}"
