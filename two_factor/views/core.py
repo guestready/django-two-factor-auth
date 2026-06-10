@@ -485,9 +485,12 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
                 and default_device(request.user)
                 and not request.user.is_verified()):
             return redirect_to_login(request.get_full_path())
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
         if not self.get_available_methods():
             return redirect('two_factor:profile')
-        return super().dispatch(request, *args, **kwargs)
+        return super().get(request, *args, **kwargs)
 
     def get_form(self, step=None, **kwargs):
         # Until https://github.com/jazzband/django-formtools/pull/62 is merged
