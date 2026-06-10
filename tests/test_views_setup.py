@@ -230,6 +230,16 @@ class SetupTest(UserMixin, TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(self.login_url, response.url)
 
+    def test_reentry_blocked_on_post_when_configured_but_unverified(self):
+        # The guard must also cover POST: an enrolled-but-unverified session
+        # must not be able to drive the wizard via step submissions and reach
+        # done() (which would otp-login it, bypassing the two-factor gate).
+        self.enable_otp()
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'welcome'})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(self.login_url, response.url)
+
     def test_no_double_login(self):
         """
         Activating two-factor authentication for ones account, should

@@ -477,11 +477,15 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         method_key = method_data.get('method', None)
         return registry.get_method(method_key)
 
-    def get(self, request, *args, **kwargs):
-        # Enrolled but unverified can't re-enter: done() would verify them.
-        if default_device(request.user) and not request.user.is_verified():
+    def dispatch(self, request, *args, **kwargs):
+        # Enrolled but unverified can't (re-)enter setup on GET *or* POST:
+        # done() calls django_otp.login, which would verify the session without
+        # going through the two-factor login gate.
+        if (request.user.is_authenticated
+                and default_device(request.user)
+                and not request.user.is_verified()):
             return redirect_to_login(request.get_full_path())
-        return super().get(request, *args, **kwargs)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form(self, step=None, **kwargs):
         # Until https://github.com/jazzband/django-formtools/pull/62 is merged
