@@ -29,6 +29,11 @@ class DisableTest(UserMixin, TestCase):
         self.assertRedirects(response, resolve_url(settings.LOGIN_REDIRECT_URL))
         self.assertEqual(list(devices_for_user(self.user)), [])
 
+    def test_post_removes_unconfirmed_devices(self):
+        self.user.totpdevice_set.create(name='backup', confirmed=False)
+        self.client.post(reverse('two_factor:disable'), {'understand': '1'})
+        self.assertEqual(list(devices_for_user(self.user, confirmed=None)), [])
+
     def test_cannot_disable_twice(self):
         [i.delete() for i in devices_for_user(self.user)]
         response = self.client.get(reverse('two_factor:disable'))
