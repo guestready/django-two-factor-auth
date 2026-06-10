@@ -7,6 +7,8 @@ from django.views.decorators.cache import never_cache
 from django.views.generic import FormView, TemplateView, View
 from django_otp import devices_for_user
 from django_otp.decorators import otp_required
+from django_otp import DEVICE_ID_SESSION_KEY
+import django_otp
 
 from two_factor.plugins.phonenumber.utils import (
     backup_phones, get_available_phone_methods,
@@ -109,6 +111,7 @@ class DeviceDeleteView(View):
         others = other_method_devices(request.user, device)
         if not others:
             return redirect('two_factor:disable')
+        verified_with_deleted = request.session.get(DEVICE_ID_SESSION_KEY) == device.persistent_id
         with transaction.atomic():
             was_default = device.name == 'default'
             device.delete()
@@ -116,4 +119,6 @@ class DeviceDeleteView(View):
                 others[0].name = 'default'
                 others[0].save(update_fields=['name'])
         reset_default_device_cache(request.user)
+        if verified_with_deleted:
+            django_otp.login(request, default_device(request.user)) # promote the new default
         return redirect(resolve_url(self.success_url))

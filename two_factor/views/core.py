@@ -566,7 +566,8 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         else:
             raise NotImplementedError("Unknown method '%s'" % method.code)
 
-        django_otp.login(self.request, device)
+        if not self.request.user.is_verified():
+            django_otp.login(self.request, device)
         return redirect(self.get_success_url())
 
     def get_form_kwargs(self, step=None):
