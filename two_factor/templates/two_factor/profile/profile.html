@@ -24,7 +24,7 @@
           {% endif %}
           <form method="post" action="{% url 'two_factor:device_delete' %}"
               style="display:inline"
-              onsubmit="return confirm('{% trans 'Are you sure?' %}'')">
+              onsubmit="return confirm('{% trans 'Are you sure?' %}')">
             {% csrf_token %}
             <input type="hidden" name="device" value="{{ device.persistent_id }}">
             <button class="btn btn-sm btn-warning"
@@ -46,7 +46,7 @@
             <li>
               {{ phone|as_action }}
               <form method="post" action="{% url 'two_factor:phone_delete' phone.id %}"
-                  onsubmit="return confirm({% trans 'Are you sure?' %})">
+                  onsubmit="return confirm('{% trans 'Are you sure?' %}')">
                 {% csrf_token %}
                 <button class="btn btn-sm btn-warning"
                       type="submit">{% trans "Unregister" %}</button>
