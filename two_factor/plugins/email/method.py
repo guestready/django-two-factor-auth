@@ -2,6 +2,7 @@ from django.utils.translation import gettext_lazy as _
 from django_otp.plugins.otp_email.models import EmailDevice
 
 from two_factor.plugins.registry import MethodBase
+from two_factor.utils import default_device
 
 from .forms import AuthenticationTokenForm, DeviceValidationForm, EmailForm
 from .utils import mask_email
@@ -32,7 +33,7 @@ class EmailMethod(MethodBase):
         if not device:
             device = EmailDevice(
                 user=request.user,
-                name='default',
+                name='default' if default_device(request.user) is None else self.code,
                 confirmed=False,
             )
         return device
