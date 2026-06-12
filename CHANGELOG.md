@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.16.2
+### Added
+- Enroll multiple 2FA methods from the profile ("Add another method").
+- Allow multiple passkeys (WebAuthn) per account, each with its own nickname.
+- Manage configured methods from the profile: set a method as default,
+  unregister a method, and automatically promote a new default when the current
+  default is removed.
+
+### Changed
+- Name newly enrolled devices by their method code so a single `default` device
+  is preserved.
+- Email devices remain unconfirmed until the setup token is verified, and an
+  in-progress email enrollment no longer claims the `default` name.
+- Block enrolled-but-unverified sessions from re-entering setup (GET and POST).
+- Redirect to the profile page when no further methods are available to add.
+
+### Fixed
+- Disabling two-factor authentication now also removes in-progress/unconfirmed
+  devices.
+
 ## 1.16.1
 ### Changed
 - Upgraded django-phonenumber-field dependency from <8 to <9
