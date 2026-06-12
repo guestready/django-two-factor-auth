@@ -1,18 +1,25 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.shortcuts import redirect, resolve_url
 from django.utils.functional import lazy
 from django.views.decorators.cache import never_cache
-from django.views.generic import FormView, TemplateView
+from django.views.generic import FormView, TemplateView, View
 from django_otp import devices_for_user
 from django_otp.decorators import otp_required
+from django_otp import DEVICE_ID_SESSION_KEY
+import django_otp
 
 from two_factor.plugins.phonenumber.utils import (
     backup_phones, get_available_phone_methods,
 )
 
 from ..forms import DisableForm
-from ..utils import default_device
+from ..plugins.registry import registry
+from ..utils import (
+    default_device, get_method_devices, other_method_devices,
+    reset_default_device_cache, resolve_user_device,
+)
 from .utils import class_view_decorator
 
 
@@ -43,6 +50,7 @@ class ProfileView(TemplateView):
             'backup_tokens': backup_tokens,
             'backup_phones': backup_phones(user),
             'available_phone_methods': get_available_phone_methods(),
+            'method_devices': get_method_devices(user),
         }
 
         return context
@@ -68,3 +76,49 @@ class DisableView(FormView):
         for device in devices_for_user(self.request.user):
             device.delete()
         return redirect(self.success_url)
+
+
+@class_view_decorator(never_cache)
+@class_view_decorator(otp_required)
+class DeviceSetDefaultView(View):
+    """Make a configured method device the primary one."""
+    http_method_names = ['post']
+    success_url = 'two_factor:profile'
+
+    def post(self, request, *args, **kwargs):
+        device = resolve_user_device(request.user, request.POST.get('device'))
+        if device.name != 'default':
+            current = default_device(request.user)
+            with transaction.atomic():
+                if current:
+                    current.name = registry.method_from_device(current).code
+                    current.save(update_fields=['name'])
+                device.name = 'default'
+                device.save(update_fields=['name'])
+            reset_default_device_cache(request.user)
+        return redirect(resolve_url(self.success_url))
+
+
+@class_view_decorator(never_cache)
+@class_view_decorator(otp_required)
+class DeviceDeleteView(View):
+    """Remove a method device; the last one hands off to DisableView."""
+    http_method_names = ['post']
+    success_url = 'two_factor:profile'
+
+    def post(self, request, *args, **kwargs):
+        device = resolve_user_device(request.user, request.POST.get('device'))
+        others = other_method_devices(request.user, device)
+        if not others:
+            return redirect('two_factor:disable')
+        verified_with_deleted = request.session.get(DEVICE_ID_SESSION_KEY) == device.persistent_id
+        with transaction.atomic():
+            was_default = device.name == 'default'
+            device.delete()
+            if was_default:
+                others[0].name = 'default'
+                others[0].save(update_fields=['name'])
+        reset_default_device_cache(request.user)
+        if verified_with_deleted:
+            django_otp.login(request, default_device(request.user)) # promote the new default
+        return redirect(resolve_url(self.success_url))

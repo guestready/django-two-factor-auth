@@ -2,6 +2,7 @@ from unittest import mock
 from urllib.parse import parse_qsl, urlparse
 
 from django.contrib.auth.hashers import make_password
+from django.http import Http404
 from django.test import TestCase, override_settings
 from django_otp.util import random_hex
 from phonenumber_field.phonenumber import PhoneNumber
@@ -15,8 +16,8 @@ from two_factor.plugins.phonenumber.utils import (
 )
 from two_factor.plugins.registry import GeneratorMethod, MethodRegistry
 from two_factor.utils import (
-    USER_DEFAULT_DEVICE_ATTR_NAME, default_device, get_otpauth_url,
-    totp_digits,
+    USER_DEFAULT_DEVICE_ATTR_NAME, default_device, get_method_devices,
+    get_otpauth_url, other_method_devices, resolve_user_device, totp_digits,
 )
 from two_factor.views.utils import (
     get_remember_device_cookie, validate_remember_device_cookie,
@@ -200,3 +201,46 @@ class EmailUtilsTests(TestCase):
     def test_mask_email(self):
         self.assertEqual(mask_email('bouke@example.com'), 'b***e@example.com')
         self.assertEqual(mask_email('tim@example.com'), 't**@example.com')
+
+
+@override_settings(
+    TWO_FACTOR_SMS_GATEWAY='two_factor.gateways.fake.Fake',
+    TWO_FACTOR_CALL_GATEWAY='two_factor.gateways.fake.Fake',
+)
+class MethodDevicesTests(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.totp = self.user.totpdevice_set.create(name='default')
+
+    def test_get_method_devices_excludes_backup(self):
+        self.user.phonedevice_set.create(name='backup', number='+12024561111', method='sms')
+        sms = self.user.phonedevice_set.create(name='sms', number='+12024561111', method='sms')
+        pids = {device.persistent_id for device in get_method_devices(self.user)}
+        self.assertEqual(pids, {self.totp.persistent_id, sms.persistent_id})
+
+    def test_other_method_devices_excludes_given(self):
+        sms = self.user.phonedevice_set.create(name='sms', number='+12024561111', method='sms')
+        others = other_method_devices(self.user, self.totp)
+        self.assertEqual([device.persistent_id for device in others], [sms.persistent_id])
+
+
+class ResolveUserDeviceTests(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.totp = self.user.totpdevice_set.create(name='default')
+
+    def test_resolves_owned_device(self):
+        device = resolve_user_device(self.user, self.totp.persistent_id)
+        self.assertEqual(device.persistent_id, self.totp.persistent_id)
+
+    def test_unknown_device_raises_404(self):
+        with self.assertRaises(Http404):
+            resolve_user_device(self.user, 'bogus.model/999')
+
+    def test_other_users_device_raises_404(self):
+        other = self.create_user(username='eve@example.com')
+        device = other.totpdevice_set.create(name='default')
+        with self.assertRaises(Http404):
+            resolve_user_device(self.user, device.persistent_id)
