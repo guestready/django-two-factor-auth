@@ -29,6 +29,18 @@ from .utils import (
 )
 
 
+class WebauthnNicknameForm(forms.Form):
+    nickname = forms.CharField(
+        label=_("Passkey nickname"),
+        max_length=64,
+        help_text=_(
+            "This passkey can work across multiple devices — pick a nickname "
+            "that will help you identify it later. For example, the name of "
+            "your password manager or account provider."
+        ),
+    )
+
+
 class DefaultWebauthnEntitiesFormMixin:
     """
     Mixin to build WebAuthn entities from HttpRequest instances

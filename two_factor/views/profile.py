@@ -73,7 +73,7 @@ class DisableView(FormView):
         return fn(*args, **kwargs)
 
     def form_valid(self, form):
-        for device in devices_for_user(self.request.user):
+        for device in devices_for_user(self.request.user, confirmed=None):
             device.delete()
         return redirect(self.success_url)
 

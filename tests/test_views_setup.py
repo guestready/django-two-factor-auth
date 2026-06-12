@@ -7,6 +7,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.oath import totp
+from django_otp.plugins.otp_email.models import EmailDevice
 
 from two_factor.plugins.registry import registry
 from two_factor.views import SetupView
@@ -24,6 +25,19 @@ class SetupTest(UserMixin, TestCase):
         response = self.client.get(reverse('two_factor:setup'))
         self.assertContains(response, 'Follow the steps in this wizard to '
                                       'enable two-factor')
+
+    def test_reentry_shows_add_method_messaging(self):
+        self.enable_otp()
+        self.login_user()  # re-login so the session device marks us verified
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertContains(response, 'Add an authentication method')
+
+    @method_registry(['generator'])
+    def test_redirects_to_profile_when_no_methods_available(self):
+        self.enable_otp()
+        self.login_user()
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertRedirects(response, reverse('two_factor:profile'))
 
     @method_registry(['generator'])
     def test_setup_only_generator_available(self):
@@ -304,3 +318,56 @@ class SetupViewDeviceNameTest(UserMixin, TestCase):
         device = self.user.totpdevice_set.create(name='default')
         method = registry.get_method('generator')
         self.assertEqual(self.view.get_new_device_name(method, device), 'default')
+
+
+class SetupViewAvailableMethodsTest(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.view = SetupView()
+        self.view.request = RequestFactory().get('/')
+        self.view.request.user = self.user
+        self.view.storage = mock.Mock(validated_step_data={})
+
+    def codes(self):
+        return [method.code for method in self.view.get_available_methods()]
+
+    @method_registry(['generator', 'webauthn'])
+    def test_lists_all_when_none_configured(self):
+        self.assertEqual(set(self.codes()), {'generator', 'webauthn'})
+
+    @method_registry(['generator', 'webauthn'])
+    def test_excludes_configured_single_method(self):
+        self.user.totpdevice_set.create(name='default')
+        self.assertEqual(self.codes(), ['webauthn'])
+
+    @method_registry(['generator', 'webauthn'])
+    def test_keeps_webauthn_when_already_configured(self):
+        self.user.webauthn_keys.create(
+            name='default', public_key='x', key_handle='y', sign_count=0)
+        self.assertIn('webauthn', self.codes())
+
+    @method_registry(['generator', 'webauthn'])
+    def test_keeps_current_method_being_set_up(self):
+        # A single method stays available while it is the one being set up, even
+        # though its device may have been saved mid-wizard (e.g. email).
+        self.user.totpdevice_set.create(name='default')
+        self.view.get_method = lambda: registry.get_method('generator')
+        self.assertIn('generator', self.codes())
+
+
+class SetupCompleteViewTest(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.enable_otp()
+        self.login_user()  # session device marks us verified for otp_required
+
+    def test_first_setup_shows_enabled_message(self):
+        response = self.client.get(reverse('two_factor:setup_complete'))
+        self.assertContains(response, 'successfully enabled two-factor')
+
+    def test_added_method_shows_added_message(self):
+        EmailDevice.objects.create(user=self.user, name='email')
+        response = self.client.get(reverse('two_factor:setup_complete'))
+        self.assertContains(response, 'added another')

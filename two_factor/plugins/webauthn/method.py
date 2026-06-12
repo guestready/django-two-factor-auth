@@ -4,6 +4,7 @@ from two_factor.plugins.registry import MethodBase
 
 from .forms import (
     WebauthnAuthenticationTokenForm, WebauthnDeviceValidationForm,
+    WebauthnNicknameForm,
 )
 from .models import WebauthnDevice
 from .utils import verify_registration_response
@@ -12,6 +13,7 @@ from .utils import verify_registration_response
 class WebAuthnMethod(MethodBase):
     code = 'webauthn'
     verbose_name = _('WebAuthn')
+    allow_multiple = True
 
     def get_devices(self, user):
         return user.webauthn_keys.all()
@@ -32,7 +34,10 @@ class WebAuthnMethod(MethodBase):
         return isinstance(device, WebauthnDevice)
 
     def get_setup_forms(self, *args):
-        return {self.code: WebauthnDeviceValidationForm}
+        return {
+            self.code: WebauthnDeviceValidationForm,
+            'webauthn_nickname': WebauthnNicknameForm,
+        }
 
     def get_device_from_setup_data(self, request, setup_data, **kwargs):
         webauthn_setup_data = setup_data.get('webauthn')
@@ -49,6 +54,7 @@ class WebAuthnMethod(MethodBase):
 
         return WebauthnDevice(
             name='default',
+            nickname=setup_data.get('webauthn_nickname', {}).get('nickname', ''),
             public_key=public_key,
             key_handle=key_handle,
             sign_count=sign_count,
@@ -63,3 +69,9 @@ class WebAuthnMethod(MethodBase):
 
     def get_verbose_action(self, device):
         return _('Please use your WebAuthn-compatible device to authenticate.')
+
+    def get_device_label(self, device):
+        nickname = getattr(device, 'nickname', '')
+        if nickname:
+            return f'{self.verbose_name} - {nickname}'
+        return self.verbose_name

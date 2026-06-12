@@ -14,6 +14,7 @@ class WebauthnDevice(ThrottlingMixin, Device):
     public_key = models.TextField()
     key_handle = models.TextField()
     sign_count = models.IntegerField()
+    nickname = models.CharField(max_length=64, blank=True, default='')
 
     def get_throttle_factor(self):
         return settings.TWO_FACTOR_WEBAUTHN_THROTTLE_FACTOR

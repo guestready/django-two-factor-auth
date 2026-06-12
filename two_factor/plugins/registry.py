@@ -5,6 +5,7 @@ class MethodBase:
     code = None
     verbose_name = None
     form_path = None
+    allow_multiple = False
 
     def get_devices(self, user):
         raise NotImplementedError()
@@ -48,6 +49,10 @@ class MethodBase:
 
     def get_verbose_action(self, device):
         raise NotImplementedError()
+
+    def get_device_label(self, device):
+        """Human label for a device in the profile list."""
+        return self.verbose_name
 
 
 class GeneratorMethod(MethodBase):

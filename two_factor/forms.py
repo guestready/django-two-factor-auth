@@ -16,14 +16,15 @@ class MethodForm(forms.Form):
     method = forms.ChoiceField(label=_("Method"),
                                widget=forms.RadioSelect)
 
-    def __init__(self, **kwargs):
+    def __init__(self, methods=None, **kwargs):
         super().__init__(**kwargs)
 
-        method = self.fields['method']
-        method.choices = [
-            (m.code, m.verbose_name) for m in registry.get_methods()
-        ]
-        method.initial = method.choices[0][0]
+        if methods is None:
+            methods = registry.get_methods()
+        field = self.fields['method']
+        field.choices = [(method.code, method.verbose_name) for method in methods]
+        if field.choices:
+            field.initial = field.choices[0][0]
 
 
 class DeviceValidationForm(forms.Form):

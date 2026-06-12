@@ -45,7 +45,7 @@ from ..forms import (
     AuthenticationTokenForm, BackupTokenForm, DeviceValidationForm, MethodForm,
     TOTPDeviceForm,
 )
-from ..utils import default_device, get_otpauth_url
+from ..utils import default_device, get_method_devices, get_otpauth_url
 from .utils import (
     IdempotentSessionWizardView, class_view_decorator,
     get_remember_device_cookie, validate_remember_device_cookie,
@@ -487,6 +487,11 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             return redirect_to_login(request.get_full_path())
         return super().dispatch(request, *args, **kwargs)
 
+    def get(self, request, *args, **kwargs):
+        if not self.get_available_methods():
+            return redirect('two_factor:profile')
+        return super().get(request, *args, **kwargs)
+
     def get_form(self, step=None, **kwargs):
         # Until https://github.com/jazzband/django-formtools/pull/62 is merged
         if (step or self.steps.current) not in self.form_list:
@@ -515,7 +520,14 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         return form_list
 
     def get_available_methods(self):
-        return registry.get_methods()
+        user = self.request.user
+        current = self.get_method()
+        return [
+            method for method in registry.get_methods()
+            if method.allow_multiple
+            or (current and method.code == current.code)
+            or not list(method.get_devices(user))
+        ]
 
     def get_new_device_name(self, method, current_device=None):
         """
@@ -590,6 +602,8 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             kwargs['device'] = self.get_device()
         if 'request' in form_params:
             kwargs['request'] = self.request
+        if 'methods' in form_params:
+            kwargs['methods'] = self.get_available_methods()
 
         metadata = self.get_form_metadata(step)
         if metadata:
@@ -641,6 +655,9 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         elif self.steps.current == 'validation':
             context['device'] = self.get_device()
         context['cancel_url'] = resolve_url(settings.LOGIN_REDIRECT_URL)
+        # True when the user is adding a method to an account that already has
+        # 2FA, so templates can show "add a method" instead of "enable 2FA".
+        context['already_enabled'] = bool(default_device(self.request.user))
         return context
 
     def process_step(self, form):
@@ -706,6 +723,7 @@ class SetupCompleteView(TemplateView):
     def get_context_data(self):
         return {
             'phone_methods': get_available_phone_methods(),
+            'is_method_added': len(get_method_devices(self.request.user)) > 1,
         }
 
 
