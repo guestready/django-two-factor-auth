@@ -2,11 +2,14 @@ from base64 import b32decode
 from binascii import unhexlify
 from unittest import mock
 
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django_otp import DEVICE_ID_SESSION_KEY
 from django_otp.oath import totp
+
+from two_factor.plugins.registry import registry
+from two_factor.views import SetupView
 
 from .utils import UserMixin, method_registry
 
@@ -214,11 +217,28 @@ class SetupTest(UserMixin, TestCase):
         self.assertEqual(phones[0].number.as_e164, '+31101234567')
         self.assertEqual(phones[0].method, 'sms')
 
-    def test_already_setup(self):
+    def test_reentry_allowed_when_already_configured(self):
+        # A configured user can re-enter the wizard to add another method.
         self.enable_otp()
         self.login_user()
         response = self.client.get(reverse('two_factor:setup'))
-        self.assertRedirects(response, reverse('two_factor:setup_complete'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_reentry_blocked_when_configured_but_unverified(self):
+        self.enable_otp()
+        response = self.client.get(reverse('two_factor:setup'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(self.login_url, response.url)
+
+    def test_reentry_blocked_on_post_when_configured_but_unverified(self):
+        # The guard must also cover POST: an enrolled-but-unverified session
+        # must not be able to drive the wizard via step submissions and reach
+        # done() (which would otp-login it, bypassing the two-factor gate).
+        self.enable_otp()
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'welcome'})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(self.login_url, response.url)
 
     def test_no_double_login(self):
         """
@@ -253,3 +273,34 @@ class SetupTest(UserMixin, TestCase):
 
         # view should return HTTP 400 Bad Request
         self.assertEqual(response.status_code, 400)
+
+
+class SetupViewDeviceNameTest(UserMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user()
+        self.view = SetupView()
+        self.view.request = RequestFactory().get('/')
+        self.view.request.user = self.user
+
+    def test_first_device_is_named_default(self):
+        method = registry.get_method('generator')
+        self.assertEqual(self.view.get_new_device_name(method), 'default')
+
+    def test_additional_device_is_named_after_its_method(self):
+        self.user.totpdevice_set.create(name='default')
+        method = registry.get_method('email')
+        self.assertEqual(self.view.get_new_device_name(method), 'email')
+
+    def test_duplicate_method_is_named_after_its_method(self):
+        # A second device of an already-configured method is allowed.
+        self.user.totpdevice_set.create(name='default')
+        method = registry.get_method('generator')
+        self.assertEqual(self.view.get_new_device_name(method), 'generator')
+
+    def test_resaving_current_default_keeps_default_name(self):
+        # Email reuses and re-saves its own device mid-wizard; the device being
+        # saved is excluded, so it stays 'default' instead of being demoted.
+        device = self.user.totpdevice_set.create(name='default')
+        method = registry.get_method('generator')
+        self.assertEqual(self.view.get_new_device_name(method, device), 'default')

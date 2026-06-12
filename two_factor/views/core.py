@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.views import redirect_to_login
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.signing import BadSignature
 from django.forms import Form, ValidationError
@@ -476,13 +477,15 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         method_key = method_data.get('method', None)
         return registry.get_method(method_key)
 
-    def get(self, request, *args, **kwargs):
-        """
-        Start the setup wizard. Redirect if already enabled.
-        """
-        if default_device(self.request.user):
-            return redirect(self.get_success_url())
-        return super().get(request, *args, **kwargs)
+    def dispatch(self, request, *args, **kwargs):
+        # Enrolled but unverified can't (re-)enter setup on GET *or* POST:
+        # done() calls django_otp.login, which would verify the session without
+        # going through the two-factor login gate.
+        if (request.user.is_authenticated
+                and default_device(request.user)
+                and not request.user.is_verified()):
+            return redirect_to_login(request.get_full_path())
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form(self, step=None, **kwargs):
         # Until https://github.com/jazzband/django-formtools/pull/62 is merged
@@ -514,6 +517,17 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
     def get_available_methods(self):
         return registry.get_methods()
 
+    def get_new_device_name(self, method, current_device=None):
+        """
+        Name for the device being enrolled: 'default' for the account's first
+        device, otherwise the method code.
+        """
+        has_other_default = any(
+            device.name == 'default' and (current_device is None or device.persistent_id != current_device.persistent_id)
+            for device in devices_for_user(self.request.user)
+        )
+        return method.code if has_other_default else 'default'
+
     def render_next_step(self, form, **kwargs):
         """
         In the validation step, ask the device to generate a challenge.
@@ -542,7 +556,7 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
         # TOTPDeviceForm
         if method.code == 'generator':
             form = [form for form in form_list if isinstance(form, TOTPDeviceForm)][0]
-            device = form.save()
+            device = form.save(name=self.get_new_device_name(method))
 
         # PhoneNumberForm / YubiKeyDeviceForm / EmailForm / WebauthnDeviceValidationForm
         elif method.code in ('call', 'sms', 'yubikey', 'email', 'webauthn'):
@@ -550,6 +564,7 @@ class SetupView(RedirectURLMixin, IdempotentSessionWizardView):
             if method.code == 'email':
                 device.confirmed = True
 
+            device.name = self.get_new_device_name(method, device)
             device.save()
 
         else:
