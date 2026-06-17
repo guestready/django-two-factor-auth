@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+### Fixed
+- An in-progress email enrollment is now named by its method code (`email`)
+  instead of `default`, so an abandoned, unconfirmed email device can no longer
+  cause a second device to also be named `default`.
+- An unconfirmed email device is no longer treated as a configured method: it no
+  longer hides email from the setup form, no longer appears in the profile
+  device list, and is reused (rather than duplicated) when email setup is
+  retried.
+
 ## 1.16.2
 ### Added
 - Enroll multiple 2FA methods from the profile ("Add another method").
