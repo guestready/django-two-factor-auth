@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.16.3
 ### Fixed
 - An in-progress email enrollment is now named by its method code (`email`)
   instead of `default`, so an abandoned, unconfirmed email device can no longer
