@@ -1,4 +1,5 @@
 import re
+from binascii import unhexlify
 from unittest import mock
 
 from django.conf import settings
@@ -7,8 +8,11 @@ from django.shortcuts import resolve_url
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
-from django_otp import DEVICE_ID_SESSION_KEY
+from django_otp import DEVICE_ID_SESSION_KEY, devices_for_user
+from django_otp.oath import totp
 from django_otp.plugins.otp_email.models import EmailDevice
+
+from two_factor.utils import get_method_devices
 
 from .utils import UserMixin, default_device
 
@@ -189,3 +193,96 @@ class EmailTest(UserMixin, TestCase):
         self.user.email = ""
         self.user.save()
         self.test_device_without_email()
+
+    @mock.patch('django.db.models.signals.post_save.send')
+    @override_settings(OTP_EMAIL_THROTTLE_FACTOR=0)
+    def test_inprogress_email_device_named_email_not_default(self, signals):
+        # The in-progress (unconfirmed) email device must not claim 'default'.
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'welcome'})
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'method',
+                               'method-method': 'email'})
+        device = EmailDevice.objects.get(user=self.user)
+        self.assertFalse(device.confirmed)
+        self.assertEqual(device.name, 'email')
+
+    @mock.patch('django.db.models.signals.post_save.send')
+    @override_settings(OTP_EMAIL_THROTTLE_FACTOR=0)
+    def test_abandoned_email_does_not_cause_double_default(self, signals):
+        # Abandon an in-progress email setup (persists an unconfirmed device)...
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'welcome'})
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'method',
+                               'method-method': 'email'})
+
+        # ...then complete a generator setup instead.
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'welcome'})
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'method',
+                               'method-method': 'generator'})
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'generator',
+                                          'generator-token': '123456'})
+        key = response.context_data['keys'].get('generator')
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'generator',
+                                          'generator-token': totp(unhexlify(key.encode()))})
+        self.assertRedirects(response, reverse('two_factor:setup_complete'))
+
+        defaults = [d for d in devices_for_user(self.user, confirmed=None)
+                    if d.name == 'default']
+        self.assertEqual(len(defaults), 1)
+        self.assertEqual(self.user.totpdevice_set.get().name, 'default')
+
+    @mock.patch('django.db.models.signals.post_save.send')
+    @override_settings(OTP_EMAIL_THROTTLE_FACTOR=0)
+    def test_first_confirmed_email_becomes_default(self, signals):
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'welcome'})
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'method',
+                               'method-method': 'email'})
+        token = re.findall(r'[0-9]{6}', mail.outbox[0].body)[0]
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'validation',
+                               'validation-token': token})
+        device = default_device(self.user)
+        self.assertIsInstance(device, EmailDevice)
+        self.assertEqual(device.name, 'default')
+
+    def test_unconfirmed_email_does_not_block_setup(self):
+        self.user.emaildevice_set.create(name='email', confirmed=False)
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'welcome'})
+        self.assertContains(
+            response,
+            '<input type="radio" name="method-method" value="email" required id="id_method-method_1">',
+            html=True
+        )
+
+    @mock.patch('django.db.models.signals.post_save.send')
+    @override_settings(OTP_EMAIL_THROTTLE_FACTOR=0)
+    def test_unconfirmed_email_reused_no_duplicate(self, signals):
+        self.user.emaildevice_set.create(name='email', confirmed=False)
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'welcome'})
+        self.client.post(reverse('two_factor:setup'),
+                         data={'setup_view-current_step': 'method',
+                               'method-method': 'email'})
+        token = re.findall(r'[0-9]{6}', mail.outbox[0].body)[0]
+        response = self.client.post(reverse('two_factor:setup'),
+                                    data={'setup_view-current_step': 'validation',
+                                          'validation-token': token})
+        self.assertRedirects(response, reverse('two_factor:setup_complete'))
+        self.assertEqual(EmailDevice.objects.filter(user=self.user).count(), 1)
+        self.assertTrue(EmailDevice.objects.get(user=self.user).confirmed)
+
+    def test_unconfirmed_email_hidden_from_profile(self):
+        self.user.emaildevice_set.create(name='email', confirmed=False)
+        response = self.client.get(reverse('two_factor:profile'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(default_device(self.user))
+        self.assertEqual(list(get_method_devices(self.user)), [])
